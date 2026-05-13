@@ -9,3 +9,13 @@ Each agent occupies a position on a 2D grid and possesses a cultural vector comp
 The model demonstrates an important paradox explored in the original paper:
 
 > Local convergence between similar individuals can generate stable global polarization.
+
+# Project Structure
+
+```text
+Axelrod_cultural_dissemination/
+│
+├── agent.py      # Agent behavior and interaction rules
+├── model.py      # Mesa model and scheduler
+├── app.py        # Solara visualization app
+├── README.md
