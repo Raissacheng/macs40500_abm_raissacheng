@@ -27,7 +27,10 @@ def friendship_boundary_plot(model):
             if model.grid.is_cell_empty((x, y)):
                 ax.add_patch(plt.Rectangle((x, y), 1, 1, color='lightgrey', alpha=0.3))
 
-    # Draw agent squares with blue gradient based on the number of relationships
+    # ---------------------------------------------------
+    # Draw neighborhood boundary field + agent overlay
+    # ---------------------------------------------------
+
     max_relationships = max(
         1,
         max((len(agent.relationships) for agent in model.agents), default=0)
@@ -35,99 +38,87 @@ def friendship_boundary_plot(model):
 
     for x in range(width):
         for y in range(height):
+
             cell = model.grid.get_cell_list_contents((x, y))
-            if cell:
-                agent = cell[0]
-                relation_count = len(agent.relationships)
-                ratio = relation_count / max_relationships
 
-                # Light blue for agents with no relationships, darker blue as relationship count increases.
-                color = plt.cm.Blues(0.15 + 0.75 * ratio)
-
-                ax.add_patch(
-                    plt.Rectangle(
-                        (x, y),
-                        1,
-                        1,
-                        facecolor=color,
-                        edgecolor='black',
-                        linewidth=0.5,
-                        alpha=0.9,
-                    )
-                )
-
-    # Draw relationship boundaries
-    for x in range(width):
-        for y in range(height):
-            cell = model.grid.get_cell_list_contents((x, y))
             if not cell:
                 continue
 
             agent = cell[0]
 
-            # -------------------
-            # RIGHT neighbor
-            # -------------------
-            if x < width - 1:
+            # -----------------------------------
+            # Compute local boundary strength
+            # -----------------------------------
 
-                neighbor_cell = model.grid.get_cell_list_contents((x + 1, y))
-                if neighbor_cell:
-                    neighbor = neighbor_cell[0]
+            neighbors = model.grid.get_neighbors(
+                (x, y),
+                moore=True,
+                include_center=False,
+                radius=1
+            )
 
-                    # Check if agents have a relationship
-                    has_relationship = (
-                        neighbor.unique_id in agent.relationships or
-                        agent.unique_id in neighbor.relationships
-                    )
+            if neighbors:
 
-                    if has_relationship:
-                        linestyle = "solid"
-                    else:
-                        linestyle = "dashed"
+                avg_similarity = sum(
+                    agent.similarity(neighbor)
+                    for neighbor in neighbors
+                ) / len(neighbors)
 
-                    sim = agent.similarity(neighbor)
-                    boundary = 1 - sim
+                boundary_strength = 1 - avg_similarity
 
-                    ax.plot(
-                        [x + 1, x + 1],
-                        [y, y + 1],
-                        color="black",
-                        linewidth=0.5 + sim * 4,  # Thicker boundaries = more similar
-                        alpha=0.2 + sim * 0.8,
-                        linestyle=linestyle,
-                    )
+            else:
+                boundary_strength = 0
 
-            # -------------------
-            # TOP neighbor
-            # -------------------
-            if y < height - 1:
+            # -----------------------------------
+            # Background = local boundary field
+            # -----------------------------------
 
-                neighbor_cell = model.grid.get_cell_list_contents((x, y + 1))
-                if neighbor_cell:
-                    neighbor = neighbor_cell[0]
+            boundary_color = plt.cm.Greys(boundary_strength)
 
-                    # Check if agents have a relationship
-                    has_relationship = (
-                        neighbor.unique_id in agent.relationships or
-                        agent.unique_id in neighbor.relationships
-                    )
+            ax.add_patch(
+                plt.Rectangle(
+                    (x, y),
+                    1,
+                    1,
+                    facecolor=boundary_color,
+                    edgecolor=None,
+                    alpha=0.6,
+                )
+            )
 
-                    if has_relationship:
-                        linestyle = "solid"
-                    else:
-                        linestyle = "dashed"
+            # -----------------------------------
+            # Agent color = relationship status
+            # -----------------------------------
 
-                    sim = agent.similarity(neighbor)
-                    boundary = 1 - sim
+            relation_count = len(agent.relationships)
 
-                    ax.plot(
-                        [x, x + 1],
-                        [y + 1, y + 1],
-                        color="black",
-                        linewidth=0.5 + sim * 4,  # Thicker = more similar
-                        alpha=0.2 + sim * 0.8,    # More opaque = more similar
-                        linestyle=linestyle,
-                    )
+            if relation_count == 0:
+
+                agent_color = "lightblue"
+
+            else:
+
+                ratio = relation_count / max_relationships
+
+                agent_color = plt.cm.Blues(
+                    0.4 + 0.6 * ratio
+                )
+
+            # -----------------------------------
+            # Draw smaller agent square
+            # -----------------------------------
+
+            ax.add_patch(
+                plt.Rectangle(
+                    (x + 0.2, y + 0.2),
+                    0.6,
+                    0.6,
+                    facecolor=agent_color,
+                    edgecolor='black',
+                    linewidth=0.5,
+                    alpha=1.0,
+                )
+            )
 
     ax.invert_yaxis()
 
@@ -140,17 +131,38 @@ def friendship_boundary_plot(model):
 
 def relationship_over_time(model):
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(7, 4))
 
     data = model.datacollector.get_model_vars_dataframe()
 
-    ax.plot(data["Relationships"])
+    relationships = data["Relationships"]
+
+    # the graph
+    ax.plot(relationships)
+
     ax.set_title("Number of Close Relationships Over Time")
     ax.set_xlabel("Step")
     ax.set_ylabel("Relationships")
 
-    return solara.FigureMatplotlib(fig)
+    # current exact count
+    current_count = relationships.iloc[-1]
 
+    info_text = (
+        f"Current Relationships: {current_count:.0f}"
+    )
+
+    # text under graph
+    fig.text(
+        0.5,
+        0.01,
+        info_text,
+        ha='center',
+        fontsize=10,
+    )
+
+    plt.tight_layout(rect=[0, 0.05, 1, 1])
+
+    return solara.FigureMatplotlib(fig)
 
 # ---------------------------------------------------
 # Model parameters
